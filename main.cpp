@@ -312,7 +312,7 @@ std::vector<std::pair<Leaves, double>> after_neighbors(const Leaves &leaves, Lea
   double old_lf = leaves_factor(leaves);
   for (size_t i = 0; i < leaves_per_set; i++) {
     Leaf leaf = leaves[i];
-    if (i > 0 && leaves[i - 1] == leaf) {
+    if (i > 0 && leaves[i - 1].rarity == leaf.rarity) {
       continue;
     }
     
@@ -326,7 +326,7 @@ std::vector<std::pair<Leaves, double>> after_neighbors(const Leaves &leaves, Lea
     for (auto new_rarity = static_cast<Rarity>(leaf.rarity + 1);
          new_rarity <= largest_allowed.rarity;
          new_rarity = static_cast<Rarity>(new_rarity + 1)) {
-      
+  
       std::uint8_t new_ascend_level = smallest_ascend_level_upgrade(leaf, new_rarity);
       Leaf new_leaf{new_rarity, new_ascend_level};
       if (new_leaf > largest_allowed) {
