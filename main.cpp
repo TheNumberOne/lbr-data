@@ -319,24 +319,23 @@ std::vector<std::pair<Leaves, double>> after_neighbors(const Leaves &leaves, Lea
     if (leaf != largest_allowed && leaf.ascend_level != max_ascend_level) {
       Leaves neighbor = leaves;
       neighbor[i].ascend_level++;
+      std::sort(neighbor.begin(), neighbor.end());
       result.emplace_back(neighbor, time_between(leaf, neighbor[i], old_lf));
     }
     
     for (auto new_rarity = static_cast<Rarity>(leaf.rarity + 1);
          new_rarity <= largest_allowed.rarity;
          new_rarity = static_cast<Rarity>(new_rarity + 1)) {
-      for (std::uint8_t new_ascend_level = smallest_ascend_level_upgrade(leaf, new_rarity);
-           new_ascend_level <= max_ascend_level;
-           new_ascend_level++) {
-        Leaf new_leaf{new_rarity, new_ascend_level};
-        if (new_leaf > largest_allowed) {
-          continue;
-        }
-        Leaves neighbor = leaves;
-        neighbor[i] = new_leaf;
-        std::sort(neighbor.begin(), neighbor.end());
-        result.emplace_back(neighbor, time_between(leaf, new_leaf, old_lf));
+      
+      std::uint8_t new_ascend_level = smallest_ascend_level_upgrade(leaf, new_rarity);
+      Leaf new_leaf{new_rarity, new_ascend_level};
+      if (new_leaf > largest_allowed) {
+        continue;
       }
+      Leaves neighbor = leaves;
+      neighbor[i] = new_leaf;
+      std::sort(neighbor.begin(), neighbor.end());
+      result.emplace_back(neighbor, time_between(leaf, new_leaf, old_lf));
     }
   }
   
