@@ -320,7 +320,7 @@ std::vector<std::pair<Leaves, double>> after_neighbors(const Leaves &leaves, Lea
       Leaves neighbor = leaves;
       neighbor[i].ascend_level++;
       std::sort(neighbor.begin(), neighbor.end());
-      result.emplace_back(neighbor, time_between(leaf, neighbor[i], old_lf));
+      result.emplace_back(neighbor, time_between(leaf, {leaf.rarity, static_cast<uint8_t>(leaf.ascend_level + 1)}, old_lf));
     }
     
     for (auto new_rarity = static_cast<Rarity>(leaf.rarity + 1);
@@ -426,7 +426,7 @@ int main()
     printf("%.3f\n", cost);
   }
   
-  Leaf smallest{ancient};
+  Leaf smallest{biotite};
   begin = full_set_of(smallest);
   
   for (const auto &leaves: before_neighbors(end, smallest)) {
