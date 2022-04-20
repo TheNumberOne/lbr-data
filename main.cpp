@@ -427,7 +427,7 @@ int main()
     printf("%.3f\n", cost);
   }
   
-  Leaf smallest{biotite};
+  Leaf smallest{ancient};
   begin = full_set_of(smallest);
   
   for (const auto &leaves: before_neighbors(end, smallest)) {
