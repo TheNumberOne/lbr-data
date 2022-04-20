@@ -47,11 +47,11 @@ double get_base_crit_bonus()
 const std::map<Rarity, int> &get_fusion_costs()
 {
   static const std::map<Rarity, int> fusion_costs{
-    {ancient,   0},
-    {sacred,    5},
-    {biotite,   7},
+    {ancient, 0},
+    {sacred, 5},
+    {biotite, 7},
     {malachite, 11},
-    {hematite,  19}
+    {hematite, 19}
   };
   
   return fusion_costs;
@@ -86,13 +86,38 @@ int ascension_single_level_cost(Rarity rarity, int next_ascend_level)
   return next_ascend_level * (2 + (int) std::ceil(std::pow(1.5, rarity - base)));
 }
 
-struct Leaf
+class Leaf
 {
-  Rarity rarity = hematite;
-  std::uint8_t ascend_level = max_ascend_level;
+private:
+  std::uint8_t data;
+public:
+  Leaf(Rarity rarity, std::uint8_t ascend_level) : data(((rarity - base) << 4) | ascend_level) { }
+  Leaf() : Leaf(ancient, max_ascend_level) { }
+  explicit Leaf(Rarity rarity) : Leaf(rarity, max_ascend_level) { }
+  
+  [[nodiscard]] std::uint8_t ascend_level() const
+  {
+    return data & 0xf;
+  }
+  
+  [[nodiscard]] Rarity rarity() const
+  {
+    return static_cast<Rarity>((data >> 4) + base);
+  }
+  
+  [[nodiscard]] Leaf with_rarity(Rarity rarity) const
+  {
+    return {rarity, ascend_level()};
+  }
+  
+  [[nodiscard]] Leaf with_ascend_level(std::uint8_t ascend_level) const
+  {
+    return {rarity(), ascend_level};
+  }
   
   auto operator<=>(const Leaf &) const = default;
 };
+
 
 std::map<Leaf, int> calculate_ascension_costs()
 {
@@ -120,14 +145,14 @@ const std::map<Leaf, int> &get_ascension_costs()
 
 double property_bonus(Leaf leaf, double base_property_bonus, int shards)
 {
-  int ascend_level = leaf.ascend_level;
+  int ascend_level = leaf.ascend_level();
   if (ascend_level == 0) {
     ascend_level = -1;
   }
   
   return base_property_bonus *
          (((ascend_level + 1) * 60 + levels) / 5.0 + 1) *
-         std::pow((leaf.rarity - base) * 128, 1.6) *
+         std::pow((leaf.rarity() - base) * 128, 1.6) *
          (1 + shards * 3) *
          total_quality / 20;
 }
@@ -165,10 +190,10 @@ int dark_essence_cost(Leaf old_leaf, Leaf new_leaf)
   const auto &fuse_costs = get_total_fusion_costs();
   const auto &ascension_costs = get_ascension_costs();
   
-  int fusion_shards = fuse_costs.at(new_leaf.rarity) - fuse_costs.at(old_leaf.rarity);
+  int fusion_shards = fuse_costs.at(new_leaf.rarity()) - fuse_costs.at(old_leaf.rarity());
   
   int ascension_shards =
-    ascension_costs.at(new_leaf) - (new_leaf.rarity == old_leaf.rarity ? ascension_costs.at(old_leaf) : 0);
+    ascension_costs.at(new_leaf) - (new_leaf.rarity() == old_leaf.rarity() ? ascension_costs.at(old_leaf) : 0);
   
   return dark_essence_per_ascension_shard * ascension_shards + dark_essence_per_fusion_shard * fusion_shards;
 }
@@ -225,12 +250,12 @@ double time_between(const Leaves &begin, const Leaves &end, const Leaves &throug
 
 int smallest_ascend_level_upgrade(Leaf begin, Rarity new_rarity)
 {
-  assert(begin.rarity <= new_rarity);
+  assert(begin.rarity() <= new_rarity);
   
   static std::map<std::pair<Leaf, Rarity>, int> cache;
   
-  if (begin.rarity == new_rarity) {
-    return begin.ascend_level + 1;
+  if (begin.rarity() == new_rarity) {
+    return begin.ascend_level() + 1;
   }
   
   if (cache.contains({begin, new_rarity})) {
@@ -254,13 +279,13 @@ double upper_bound_time_between(Leaves begin, const Leaves &end)
     if (begin[i] == end[i]) {
       continue;
     }
-    std::uint8_t ascend_level = smallest_ascend_level_upgrade(begin[i], end[i].rarity);
-    time += time_between(begin[i], {end[i].rarity, ascend_level}, leaves_factor(begin));
-    begin[i] = {end[i].rarity, ascend_level};
+    std::uint8_t ascend_level = smallest_ascend_level_upgrade(begin[i], end[i].rarity());
+    time += time_between(begin[i], {end[i].rarity(), ascend_level}, leaves_factor(begin));
+    begin[i] = {end[i].rarity(), ascend_level};
     
-    for (std::uint8_t j = ascend_level + 1; j <= end[i].ascend_level; j++) {
-      time += time_between(begin[i], {end[i].rarity, j}, leaves_factor(begin));
-      begin[i].ascend_level = j;
+    for (std::uint8_t j = ascend_level + 1; j <= end[i].ascend_level(); j++) {
+      time += time_between(begin[i], {end[i].rarity(), j}, leaves_factor(begin));
+      begin[i] = begin[i].with_ascend_level(j);
     }
   }
   
@@ -277,14 +302,14 @@ std::vector<std::pair<Leaves, double>> before_neighbors(const Leaves &leaves, Le
       continue;
     }
     
-    if (leaf != smallest_allowed && leaf.ascend_level != 0) {
+    if (leaf != smallest_allowed && leaf.ascend_level() != 0) {
       Leaves neighbor = leaves;
-      neighbor[i].ascend_level--;
+      neighbor[i] = neighbor[i].with_ascend_level(leaf.ascend_level() - 1);
       result.emplace_back(neighbor, time_between(neighbor[i], leaf, leaves_factor(neighbor)));
     }
     
-    for (Rarity new_rarity = smallest_allowed.rarity;
-         new_rarity < leaf.rarity;
+    for (Rarity new_rarity = smallest_allowed.rarity();
+         new_rarity < leaf.rarity();
          new_rarity = static_cast<Rarity>(new_rarity + 1)) {
       for (std::uint8_t new_ascend_level = 0; new_ascend_level <= max_ascend_level; new_ascend_level++) {
         Leaf new_leaf{new_rarity, new_ascend_level};
@@ -312,21 +337,23 @@ std::vector<std::pair<Leaves, double>> after_neighbors(const Leaves &leaves, Lea
   double old_lf = leaves_factor(leaves);
   for (size_t i = 0; i < leaves_per_set; i++) {
     Leaf leaf = leaves[i];
-    if (i > 0 && leaves[i - 1].rarity == leaf.rarity) {
+    if (i > 0 && leaves[i - 1].rarity() == leaf.rarity()) {
       continue;
     }
     
-    if (leaf != largest_allowed && leaf.ascend_level != max_ascend_level) {
+    if (leaf != largest_allowed && leaf.ascend_level() != max_ascend_level) {
       Leaves neighbor = leaves;
-      neighbor[i].ascend_level++;
+      neighbor[i] = neighbor[i].with_ascend_level(leaf.ascend_level() + 1);
       std::sort(neighbor.begin(), neighbor.end());
-      result.emplace_back(neighbor, time_between(leaf, {leaf.rarity, static_cast<uint8_t>(leaf.ascend_level + 1)}, old_lf));
+      result.emplace_back(
+        neighbor,
+        time_between(leaf, {leaf.rarity(), static_cast<uint8_t>(leaf.ascend_level() + 1)}, old_lf));
     }
     
-    for (auto new_rarity = static_cast<Rarity>(leaf.rarity + 1);
-         new_rarity <= largest_allowed.rarity;
+    for (auto new_rarity = static_cast<Rarity>(leaf.rarity() + 1);
+         new_rarity <= largest_allowed.rarity();
          new_rarity = static_cast<Rarity>(new_rarity + 1)) {
-  
+      
       std::uint8_t new_ascend_level = smallest_ascend_level_upgrade(leaf, new_rarity);
       Leaf new_leaf{new_rarity, new_ascend_level};
       if (new_leaf > largest_allowed) {
@@ -373,8 +400,7 @@ std::string leaves_to_str(const Leaves &leaves)
       result += ' ';
     }
     
-    auto [rarity, ascend_level] = leaf;
-    switch (rarity) {
+    switch (leaf.rarity()) {
       case ancient:
         result += 'a';
         break;
@@ -394,7 +420,7 @@ std::string leaves_to_str(const Leaves &leaves)
         result += '?';
         break;
     }
-    result += std::to_string(ascend_level);
+    result += std::to_string(leaf.ascend_level());
   }
   
   return result;
@@ -402,16 +428,16 @@ std::string leaves_to_str(const Leaves &leaves)
 
 int main()
 {
-  printf("%.3d\n", get_ascension_costs().at({hematite}));
-  printf("%.3d\n", dark_essence_cost({ancient}, {hematite}) * regular_essence_per_dark_essence);
-  printf("%.3d\n", dark_essence_cost({ancient}, {hematite}));
+  printf("%.3d\n", get_ascension_costs().at(Leaf(hematite)));
+  printf("%.3d\n", dark_essence_cost(Leaf(ancient), Leaf(hematite)) * regular_essence_per_dark_essence);
+  printf("%.3d\n", dark_essence_cost(Leaf(ancient), Leaf(hematite)));
   printf("%.3d\n", get_total_fusion_costs().at(hematite));
   
-  Leaves begin = full_set_of({ancient});
-  Leaves end = full_set_of({hematite});
+  Leaves begin = full_set_of(Leaf(ancient));
+  Leaves end = full_set_of(Leaf(hematite));
   printf("%.3f\n", time_between(begin, end, begin));
   printf("%.3f\n", leaves_factor(begin));
-  printf("%.3g\n", property_bonus({ancient}, get_base_wem_bonus(), wem_shards));
+  printf("%.3g\n", property_bonus(Leaf(ancient), get_base_wem_bonus(), wem_shards));
   printf("%.3g\n", get_base_wem_bonus());
   
   auto result = a_star<int>(
@@ -426,7 +452,7 @@ int main()
     printf("%.3f\n", cost);
   }
   
-  Leaf smallest{ancient};
+  Leaf smallest{biotite};
   begin = full_set_of(smallest);
   
   for (const auto &leaves: before_neighbors(end, smallest)) {
@@ -435,14 +461,14 @@ int main()
   
   std::cout << "after\n";
   
-  for (const auto &leaves: after_neighbors(begin, {hematite})) {
+  for (const auto &leaves: after_neighbors(begin, Leaf(hematite))) {
     std::cout << leaves_to_str(leaves.first) << ", " << leaves.second << '\n';
   }
   
   auto solution = a_star<Leaves>(
     begin,
     end,
-    [](const auto &leaves) { return after_neighbors(leaves, {hematite}); },
+    [](const auto &leaves) { return after_neighbors(leaves, Leaf(hematite)); },
     min_heuristic,
     max_heuristic
   );
