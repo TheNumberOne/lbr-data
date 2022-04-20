@@ -212,13 +212,13 @@ double leaves_factor(const Leaves &leaves)
   const auto &wem_bonuses = get_wem_bonuses();
   const auto &crit_bonuses = get_crit_bonuses();
   
-  double essence_per_witch = base_essence_per_witch * std::accumulate(
-    leaves.begin(), leaves.end(), 1,
+  double essence_per_witch = std::round(base_essence_per_witch * std::accumulate(
+    leaves.begin(), leaves.end(), 1.0,
     [&wem_bonuses](auto accum, auto leaf)
     {
       return accum + wem_bonuses.at(leaf);
     }
-  );
+  ));
   
   double crit_rate = std::accumulate(
     leaves.begin(), leaves.end(), base_crit_rate,
@@ -452,7 +452,7 @@ int main()
     printf("%.3f\n", cost);
   }
   
-  Leaf smallest{biotite};
+  Leaf smallest{ancient};
   begin = full_set_of(smallest);
   
   for (const auto &leaves: before_neighbors(end, smallest)) {
@@ -464,6 +464,13 @@ int main()
   for (const auto &leaves: after_neighbors(begin, Leaf(hematite))) {
     std::cout << leaves_to_str(leaves.first) << ", " << leaves.second << '\n';
   }
+  
+  printf("%.4f\n", property_bonus({ancient, 10}, get_base_wem_bonus(), wem_shards));
+  double crit_bonus = property_bonus({ancient, 10}, get_base_crit_bonus(), crit_shards);
+  printf("%.4f\n", crit_bonus);
+  printf("%d\n", dark_essence_cost({ancient, 10}, {biotite, 3}));
+  printf("%.4f\n", leaves_factor(full_set_of({ancient, 10})) / hours_per_witch / (1 + 8*crit_bonus + base_crit_rate) / regular_essence_per_dark_essence);
+  printf("%.4f\n", time_between({ancient, 10}, {biotite, 3}, leaves_factor(full_set_of({ancient, 10}))));
   
   auto solution = a_star<Leaves>(
     begin,
