@@ -12,6 +12,7 @@
 #include <set>
 #include <queue>
 #include <optional>
+#include <cstdio>
 
 template<typename T>
 std::vector<T> reconstruct_path(const std::map<T, T> &came_from, T current){
@@ -51,9 +52,14 @@ std::optional<std::pair<std::vector<T>, double>> a_star(T start, const T &end, s
     }
     i += 1;
     
+    if (current_score > best_seen) {
+      printf("bad max heuristic");
+      return std::nullopt;
+    }
+    
     auto [_, inserted] = checked.insert(current);
     
-    if (!inserted || current_score > best_seen) {
+    if (!inserted) {
       continue;
     }
     

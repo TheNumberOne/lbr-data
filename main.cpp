@@ -29,6 +29,8 @@ const int crit_shards = 7;
 const std::uint8_t max_ascend_level = 10;
 const double base_essence_per_witch = 17.9;
 const int leaves_per_set = 8;
+const bool recycle_old_leaves = false;
+const bool only_ascend_smallest_ascend_level = false;
 
 double get_base_wem_bonus()
 {
@@ -190,7 +192,15 @@ int dark_essence_cost(Leaf old_leaf, Leaf new_leaf)
   const auto &fuse_costs = get_total_fusion_costs();
   const auto &ascension_costs = get_ascension_costs();
   
-  int fusion_shards = fuse_costs.at(new_leaf.rarity()) - fuse_costs.at(old_leaf.rarity());
+  int fusion_shards = 0;
+  
+  if (new_leaf.rarity() != old_leaf.rarity()) {
+    fusion_shards = fuse_costs.at(new_leaf.rarity());
+  
+    if (recycle_old_leaves) {
+      fusion_shards -= fuse_costs.at(old_leaf.rarity());
+    }
+  }
   
   int ascension_shards =
     ascension_costs.at(new_leaf) - (new_leaf.rarity() == old_leaf.rarity() ? ascension_costs.at(old_leaf) : 0);
@@ -337,32 +347,37 @@ std::vector<std::pair<Leaves, double>> after_neighbors(const Leaves &leaves, Lea
   double old_lf = leaves_factor(leaves);
   for (size_t i = 0; i < leaves_per_set; i++) {
     Leaf leaf = leaves[i];
-    if (i > 0 && leaves[i - 1].rarity() == leaf.rarity()) {
+    if (i > 0 && leaves[i - 1] == leaf) {
       continue;
     }
     
-    if (leaf != largest_allowed && leaf.ascend_level() != max_ascend_level) {
-      Leaves neighbor = leaves;
-      neighbor[i] = neighbor[i].with_ascend_level(leaf.ascend_level() + 1);
-      std::sort(neighbor.begin(), neighbor.end());
-      result.emplace_back(
-        neighbor,
-        time_between(leaf, {leaf.rarity(), static_cast<uint8_t>(leaf.ascend_level() + 1)}, old_lf));
+    if (!only_ascend_smallest_ascend_level || i == 0 || leaves[i - 1].rarity() != leaf.rarity()) {
+      if (leaf != largest_allowed && leaf.ascend_level() != max_ascend_level) {
+        Leaves neighbor = leaves;
+        Leaf newLeaf = leaf.with_ascend_level(leaf.ascend_level() + 1);
+        neighbor[i] = newLeaf;
+        std::sort(neighbor.begin(), neighbor.end());
+        result.emplace_back(
+          neighbor,
+          time_between(leaf, newLeaf, old_lf));
+      }
     }
     
-    for (auto new_rarity = static_cast<Rarity>(leaf.rarity() + 1);
-         new_rarity <= largest_allowed.rarity();
-         new_rarity = static_cast<Rarity>(new_rarity + 1)) {
-      
-      std::uint8_t new_ascend_level = smallest_ascend_level_upgrade(leaf, new_rarity);
-      Leaf new_leaf{new_rarity, new_ascend_level};
-      if (new_leaf > largest_allowed) {
-        continue;
+    if (i == 0 || (recycle_old_leaves && leaves[i - 1].rarity() != leaf.rarity())) {
+      for (auto new_rarity = static_cast<Rarity>(leaf.rarity() + 1);
+           new_rarity <= largest_allowed.rarity();
+           new_rarity = static_cast<Rarity>(new_rarity + 1)) {
+    
+        std::uint8_t new_ascend_level = smallest_ascend_level_upgrade(leaf, new_rarity);
+        Leaf new_leaf{new_rarity, new_ascend_level};
+        if (new_leaf > largest_allowed) {
+          continue;
+        }
+        Leaves neighbor = leaves;
+        neighbor[i] = new_leaf;
+        std::sort(neighbor.begin(), neighbor.end());
+        result.emplace_back(neighbor, time_between(leaf, new_leaf, old_lf));
       }
-      Leaves neighbor = leaves;
-      neighbor[i] = new_leaf;
-      std::sort(neighbor.begin(), neighbor.end());
-      result.emplace_back(neighbor, time_between(leaf, new_leaf, old_lf));
     }
   }
   
@@ -445,7 +460,7 @@ int main()
     10,
     [](int a) { return std::vector{std::make_pair(a + 1, 1.0)}; },
     [](int a, int b) { return (double) (b - a); },
-    [](int a, int b) { return 0.0; }
+    [](int a, int b) { return 10.0; }
   );
   if (result) {
     auto [path, cost] = *result;
