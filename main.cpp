@@ -49,11 +49,11 @@ double get_base_crit_bonus()
 const std::map<Rarity, int> &get_fusion_costs()
 {
   static const std::map<Rarity, int> fusion_costs{
-    {ancient, 0},
-    {sacred, 5},
-    {biotite, 7},
+    {ancient,   0},
+    {sacred,    5},
+    {biotite,   7},
     {malachite, 11},
-    {hematite, 19}
+    {hematite,  19}
   };
   
   return fusion_costs;
@@ -94,7 +94,9 @@ private:
   std::uint8_t data;
 public:
   Leaf(Rarity rarity, std::uint8_t ascend_level) : data(((rarity - base) << 4) | ascend_level) { }
+  
   Leaf() : Leaf(ancient, max_ascend_level) { }
+  
   explicit Leaf(Rarity rarity) : Leaf(rarity, max_ascend_level) { }
   
   [[nodiscard]] std::uint8_t ascend_level() const
@@ -196,7 +198,7 @@ int dark_essence_cost(Leaf old_leaf, Leaf new_leaf)
   
   if (new_leaf.rarity() != old_leaf.rarity()) {
     fusion_shards = fuse_costs.at(new_leaf.rarity());
-  
+    
     if (recycle_old_leaves) {
       fusion_shards -= fuse_costs.at(old_leaf.rarity());
     }
@@ -222,13 +224,14 @@ double leaves_factor(const Leaves &leaves)
   const auto &wem_bonuses = get_wem_bonuses();
   const auto &crit_bonuses = get_crit_bonuses();
   
-  double essence_per_witch = std::round(base_essence_per_witch * std::accumulate(
-    leaves.begin(), leaves.end(), 1.0,
-    [&wem_bonuses](auto accum, auto leaf)
-    {
-      return accum + wem_bonuses.at(leaf);
-    }
-  ));
+  double essence_per_witch = std::round(
+    base_essence_per_witch * std::accumulate(
+      leaves.begin(), leaves.end(), 1.0,
+      [&wem_bonuses](auto accum, auto leaf)
+      {
+        return accum + wem_bonuses.at(leaf);
+      }
+    ));
   
   double crit_rate = std::accumulate(
     leaves.begin(), leaves.end(), base_crit_rate,
@@ -367,7 +370,7 @@ std::vector<std::pair<Leaves, double>> after_neighbors(const Leaves &leaves, Lea
       for (auto new_rarity = static_cast<Rarity>(leaf.rarity() + 1);
            new_rarity <= largest_allowed.rarity();
            new_rarity = static_cast<Rarity>(new_rarity + 1)) {
-    
+        
         std::uint8_t new_ascend_level = smallest_ascend_level_upgrade(leaf, new_rarity);
         Leaf new_leaf{new_rarity, new_ascend_level};
         if (new_leaf > largest_allowed) {
@@ -468,7 +471,14 @@ int main()
   }
   
   Leaf smallest{ancient};
-  begin = full_set_of(smallest);
+  Leaves new_begin{{{ancient, 10},
+                    {ancient, 10},
+                    {biotite, 3},
+                    {biotite, 5},
+                    {biotite, 5},
+                    {biotite, 5},
+                    {biotite, 5},
+                    {biotite, 5}}};
   
   for (const auto &leaves: before_neighbors(end, smallest)) {
     std::cout << leaves_to_str(leaves.first) << ", " << leaves.second << '\n';
@@ -484,11 +494,14 @@ int main()
   double crit_bonus = property_bonus({ancient, 10}, get_base_crit_bonus(), crit_shards);
   printf("%.4f\n", crit_bonus);
   printf("%d\n", dark_essence_cost({ancient, 10}, {biotite, 3}));
-  printf("%.4f\n", leaves_factor(full_set_of({ancient, 10})) / hours_per_witch / (1 + 8*crit_bonus + base_crit_rate) / regular_essence_per_dark_essence);
+  printf("%.4f\n",
+         leaves_factor(full_set_of({ancient, 10})) / hours_per_witch / (1 + 8 * crit_bonus + base_crit_rate) /
+         regular_essence_per_dark_essence
+  );
   printf("%.4f\n", time_between({ancient, 10}, {biotite, 3}, leaves_factor(full_set_of({ancient, 10}))));
   
   auto solution = a_star<Leaves>(
-    begin,
+    new_begin,
     end,
     [](const auto &leaves) { return after_neighbors(leaves, Leaf(hematite)); },
     min_heuristic,
